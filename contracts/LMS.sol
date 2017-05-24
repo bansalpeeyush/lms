@@ -42,6 +42,7 @@ contract LMS is Killable {
         string email;
         MemberStatus status;
         uint dateAdded;
+        string location;
     }
 
     uint public numBooks;
@@ -70,14 +71,15 @@ contract LMS is Killable {
         }
     }
 
-    function LMS(string name, string email) payable {
+    function LMS(string name, string email, string location) payable {
         // Owner is the first member of our library, at index 1 (NOT 0)
-        members[++numMembers] = Member(name, owner, email, MemberStatus.Active, now);
+        // location: member location, help in geo separation.
+        members[++numMembers] = Member(name, owner, email, MemberStatus.Active, now, location);
         memberIndex[owner] = numMembers;
         emailIndex[email] = numMembers;
     }
 
-    function addMember(string name, address account, string email) public onlyOwner {
+    function addMember(string name, address account, string email, string location) public onlyOwner {
         // Add or activate member
         var index = memberIndex[account];
         // TODO Check if the email is different for the same account hash. Return addMember failure with error as
@@ -87,11 +89,17 @@ contract LMS is Killable {
             members[index].status = MemberStatus.Active;
             return;
         }
-        members[++numMembers] = Member(name, account, email, MemberStatus.Active, now);
+        members[++numMembers] = Member(name, account, email, MemberStatus.Active, now, location);
         memberIndex[account] = numMembers;
         emailIndex[email] = numMembers;
     }
 
+    function getMemberDetailsByEmail(string email) constant returns (string, address, string, MemberStatus, uint, string) {
+        var i = emailIndex[email];
+        if(i != 0) {
+            return (members[i].name, members[i].account, members[i].email, members[i].status, members[i].dateAdded, members[i].location);
+        }
+    }
 
     function removeMember(address account) public onlyOwner {
         // Deactivate member
@@ -101,21 +109,14 @@ contract LMS is Killable {
         }
     }
 
-    function getOwnerDetails() constant returns (string, address, string, MemberStatus, uint) {
+    function getOwnerDetails() constant returns (string, address, string, MemberStatus, uint, string) {
         return getMemberDetailsByAccount(owner);
     }
 
-    function getMemberDetailsByAccount(address account) constant returns (string, address, string, MemberStatus, uint) {
+    function getMemberDetailsByAccount(address account) constant returns (string, address, string, MemberStatus, uint, string) {
         var i = memberIndex[account];
         if(i != 0) {
-            return (members[i].name, members[i].account, members[i].email, members[i].status, members[i].dateAdded);
-        }
-    }
-
-    function getMemberDetailsByEmail(string email) constant returns (string, address, string, MemberStatus, uint) {
-        var i = emailIndex[email];
-        if(i != 0) {
-            return (members[i].name, members[i].account, members[i].email, members[i].status, members[i].dateAdded);
+            return (members[i].name, members[i].account, members[i].email, members[i].status, members[i].dateAdded, members[i].location);
         }
     }
 
@@ -231,6 +232,30 @@ contract LMS is Killable {
 
     function getAllBooks() constant onlyMember returns (string bookString, uint8 count) {
         return getBooks(false);
+    }
+
+    function getMyLocationBooks() constant onlyMember returns (string bookString, uint8 count) {
+        string memory book;
+        string memory memberLocation;
+    
+        //get the location of the msg.sender
+        var loc = members[memberIndex[msg.sender]].location;
+
+        //Iterate over books in the catalog 
+        //get the member index of the owner of the book
+        //check if location of msg.sender is same as owner of the book
+        for(uint i = 1; i <= numBooks; i++) {
+            memberLocation = members[memberIndex[catalog[i].owner]].location;
+            if(loc.toSlice().equals(memberLocation.toSlice())) {
+                book = getBook(i);
+                count++;
+                if (bookString.toSlice().equals("".toSlice())) {
+                    bookString = book;
+                } else {
+                    bookString = bookString.toSlice().concat('|'.toSlice()).toSlice().concat(book.toSlice());
+                }
+            }
+        }
     }
 
     function borrowBook(uint id) onlyMember payable {
